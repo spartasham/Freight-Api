@@ -25,15 +25,15 @@ class Customer(models.Model):
     name        = models.CharField(max_length=120)
     email       = models.EmailField(blank=True)
 
-class Carrier(models.Model):
-    carrier_id = models.AutoField(primary_key=True)
-    name       = models.CharField(max_length=120, unique=True)
-    mode       = models.CharField(max_length=4, choices=[("air","air"),("sea","sea")])
+# class Carrier(models.Model):
+#     carrier_id = models.AutoField(primary_key=True)
+#     name       = models.CharField(max_length=120, unique=True)
+#     mode       = models.CharField(max_length=4, choices=[("air","air"),("sea","sea")])
 
 class Shipment(models.Model):
     shipment_id   = models.CharField(max_length=40, primary_key=True)
-    customer      = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
-    carrier       = models.ForeignKey(Carrier,  on_delete=models.SET_NULL, null=True, blank=True)
+    customer      = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column="customer_id", related_name="shipments", null=True, blank=True)
+    carrier       = models.CharField(max_length=120, unique=True, null=True, blank=True)
     origin        = models.CharField(max_length=2)   # US state
     destination   = models.CharField(max_length=3)   # Caribbean ISO
     weight        = models.FloatField()              # grams
@@ -56,6 +56,7 @@ class Shipment(models.Model):
             models.Index(fields=["destination", "departure_date"]),
         ]
         ordering = ["shipment_id"]
+        db_table = "shipments_shipment"
 
 class Consolidation(models.Model):
     destination     = models.CharField(max_length=3)

@@ -3,7 +3,25 @@ from celery import shared_task
 from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import Count, Sum
-from .models import CsvImport, Shipment, Consolidation, ConsolidationShipment
+from .models import CsvImport, Shipment, Consolidation, ConsolidationShipment, Customer
+from datetime import datetime
+
+DATE_INPUT_FORMATS = ("%m/%d/%Y", "%d/%m/%Y", "%Y-%m-%d")
+
+def parse_date(value: str | None):
+    """
+    Accept '07/01/2025', '01/07/2025', or '2025-07-01'.
+    Return a python date or None.
+    """
+    if not value:
+        return None
+    for fmt in DATE_INPUT_FORMATS:
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    # If none match, raise so you see the bad value
+    raise ValueError(f"Unrecognised date format: {value!r}")
 
 @shared_task(bind=True)
 def process_csv(self, import_id, file_path):
@@ -11,47 +29,68 @@ def process_csv(self, import_id, file_path):
     imp.status = "PROCESSING"
     imp.save(update_fields=["status"])
 
-    # 1️⃣ Stream via COPY for speed; fall back to csv.reader if COPY fails
-    try:
-        with connection.cursor() as cur:
-            cur.copy_expert(
-                sql="""
-                COPY shipments_shipment(
-                    shipment_id, customer_id, origin, destination, weight, volume,
-                    mode, carrier_id, status, arrival_date, departure_date, delivered_date
-                )
-                FROM STDIN WITH (FORMAT csv, HEADER true)
-                """,
-                file=open(file_path, "r"),
-            )
-    except Exception:
-        # fallback: row-by-row insert
-        with open(file_path, newline="") as f:
-            reader = csv.DictReader(f)
-            batch = []
-            for row in reader:
-                batch.append(Shipment(
-                    shipment_id    = row["shipment_id"],
-                    customer_id    = row["customer_id"] or None,
-                    origin         = row["origin"],
-                    destination    = row["destination"],
-                    weight         = float(row["weight"] or 0),
-                    volume         = float(row["volume"] or 0),
-                    mode           = row["mode"],
-                    carrier_id     = row["carrier"] or None,
-                    status         = row["status"],
-                    arrival_date   = row["arrival"] or None,
-                    departure_date = row["departure"] or None,
-                    delivered_date = row["delivered"] or None,
-                ))
-                if len(batch) >= 5000:
-                    Shipment.objects.bulk_create(batch, ignore_conflicts=True)
-                    batch.clear()
-            if batch:
-                Shipment.objects.bulk_create(batch, ignore_conflicts=True)
+    POSTGRES = connection.vendor == "postgresql"
 
-    # 2️⃣ Update processed_rows
-    imp.processed_rows = imp.total_rows
+    try:
+        if POSTGRES:
+            with connection.cursor() as cur, open(file_path, "r") as f:
+                cur.copy_expert(
+                    sql="""
+                    COPY shipments_shipment(
+                        shipment_id, customer_id, origin, destination, weight, volume,
+                        mode, carrier, status,
+                        arrival_date, departure_date, delivered_date
+                    )
+                    FROM STDIN WITH (FORMAT csv, HEADER true)
+                    """,
+                    file=f,
+                )
+            imp.processed_rows = imp.total_rows
+        else:
+            # SQLite or any DB without COPY ─ row-by-row bulk_create
+            with open(file_path, newline="") as f:
+                reader = csv.DictReader(f)
+                batch, processed = [], 0
+
+                for row in reader:
+                    processed += 1
+                    cust_pk = int(row["customer_id"]) if row["customer_id"] else None
+                    customer = None
+                    if cust_pk:
+                        customer, _ = Customer.objects.get_or_create(pk=cust_pk)
+
+                    batch.append(
+                        Shipment(
+                            shipment_id=row["shipment_id"],
+                            customer=customer,
+                            origin=row["origin"],
+                            destination=row["destination"],
+                            weight=float(row.get("weight") or 0),
+                            volume=float(row.get("volume") or 0),
+                            mode=row["mode"],
+                            carrier=row.get("carrier") or None,
+                            status=row["status"],
+                            arrival_date=parse_date(row.get("arrival_date")),
+                            departure_date=parse_date(row.get("departure_date")),
+                            delivered_date=parse_date(row.get("delivered_date")),
+                        )
+                    )
+                    if len(batch) >= 500:
+                        Shipment.objects.bulk_create(batch, ignore_conflicts=True)
+                        batch.clear()
+                        CsvImport.objects.filter(pk=import_id).update(processed_rows=processed)
+
+                if batch:
+                    Shipment.objects.bulk_create(batch, ignore_conflicts=True)
+                    CsvImport.objects.filter(pk=import_id).update(processed_rows=processed)
+
+                imp.processed_rows = processed
+
+    except Exception as exc:
+        imp.status = "FAILED"
+        imp.save(update_fields=["status"])
+        raise exc      # so Celery marks the task failed
+
     imp.status = "COMPLETED"
     imp.save(update_fields=["processed_rows", "status"])
 

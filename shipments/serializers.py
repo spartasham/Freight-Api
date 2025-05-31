@@ -1,10 +1,16 @@
 from rest_framework import serializers
-from .models import Shipment, CsvImport, Consolidation, ConsolidationShipment
+from .models import Shipment, CsvImport, Consolidation, ConsolidationShipment, Customer
 
 class ShipmentSerializer(serializers.ModelSerializer):
+    customer_id = serializers.PrimaryKeyRelatedField(
+        source='customer',
+        queryset=Customer.objects.all(),
+        write_only=True
+    )
     class Meta:
         model  = Shipment
         fields = "__all__"
+        include = ['customer_id']
 
 class CsvImportSerializer(serializers.ModelSerializer):
     class Meta:
