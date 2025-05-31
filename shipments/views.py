@@ -79,7 +79,7 @@ class MetricsViewSet(viewsets.ViewSet):
 
             # 3️⃣ Shipments by carrier
             by_carrier = list(
-                qs.values(name=F("carrier__name"))
+                qs.values("carrier")
                   .annotate(total=Count("shipment_id"))
                   .order_by("-total")
             )
