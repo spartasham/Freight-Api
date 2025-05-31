@@ -14,7 +14,7 @@ from .filters import ShipmentFilter
 
  
 class ShipmentViewSet(viewsets.ModelViewSet):
-    queryset         = Shipment.objects.all().select_related("carrier", "customer")
+    queryset         = Shipment.objects.all().select_related("customer")
     serializer_class = ShipmentSerializer
     filterset_fields = ["status", "destination", "origin", "mode", "carrier"]
     filterset_class = ShipmentFilter
