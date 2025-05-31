@@ -1,0 +1,31 @@
+[
+  {
+    "model": "shipments.customer",
+    "pk": "CUST001",
+    "fields": { "name": "Acme Corp", "email": "ops@acme.example" }
+  },
+  {
+    "model": "shipments.carrier",
+    "pk": 1,
+    "fields": { "name": "FastAir", "mode": "air" }
+  },
+  {
+    "model": "shipments.shipment",
+    "pk": "SHIP100",
+    "fields": {
+      "customer": "CUST001",
+      "carrier": 1,
+      "origin": "NY",
+      "destination": "JAM",
+      "weight": 10000,
+      "volume": 5000,
+      "mode": "air",
+      "status": "received",
+      "arrival_date": "2025-05-20",
+      "departure_date": "2025-05-18",
+      "delivered_date": null,
+      "created_at": "2025-05-20T12:00:00Z",
+      "updated_at": "2025-05-20T12:00:00Z"
+    }
+  }
+]

@@ -1,0 +1,42 @@
+# Build Folders
+bin/
+obj/
+artifacts/
+
+# User-specific files created by Visual Studio, Rider, etc.
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.ncb
+*.opensdf
+*.sdf
+*.cache
+
+# Visual Studio Code settings folder
+.vscode/
+
+# IDE-specific folders and files
+.idea/
+*.iml
+
+# Node.js dependencies (if applicable)
+node_modules/
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python cache and compiled files (if applicable)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+*.tmp
+
+venv/
+csv_imports/
